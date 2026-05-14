@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin - Blue Lock MG</title>
+<style>
+    :root { --rouge: #D62828; --bleu: #003F88; --blanc: #FFFFFF; --gris-clair: #F4F4F9; --vert: #28a745; }
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Arial, sans-serif; }
+    body { background: var(--gris-clair); }
+   .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
+   .modal.active { display: flex; }
+   .modal-box { background: var(--blanc); padding: 30px; border-radius: 16px; max-width: 350px; text-align: center; }
+    #admin-login { background: linear-gradient(135deg, var(--bleu) 0%, var(--rouge) 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+   .login-box { background: var(--blanc); border-radius: 16px; padding: 40px 30px; width: 100%; max-width: 400px; }
+    input, textarea { width: 100%; padding: 14px; border: 2px solid #e0e0e0; border-radius: 8px; margin-bottom: 16px; }
+    button { width: 100%; padding: 14px; background: linear-gradient(135deg, var(--rouge), #b81f1f); color: var(--blanc); border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
+   .btn-small { padding: 8px 16px; width: auto; background: var(--vert); }
+    #admin-dashboard { display: none; }
+   .admin-header { background: var(--bleu); color: var(--blanc); padding: 20px; }
+   .admin-tabs { display: flex; background: var(--blanc); overflow-x: auto; }
+   .tab-btn { flex: 1; padding: 16px; text-align: center; cursor: pointer; border-bottom: 3px solid transparent; }
+   .tab-btn.active { color: var(--rouge); border-bottom-color: var(--rouge); }
+   .tab-content { display: none; padding: 20px; }
+   .tab-content.active { display: block; }
+   .card { background: var(--blanc); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+   .request-item { border: 1px solid var(--gris-clair); border-radius: 10px; padding: 15px; margin-bottom: 12px; }
+   .pending { border-left: 4px solid orange; }
+   .confirmed { border-left: 4px solid var(--vert); opacity: 0.7; }
+</style>
+</head>
+<body>
+<div class="modal" id="modal"><div class="modal-box"><h3 id="modal-title">Succès</h3><p id="modal-text"></p><button onclick="closeModal()">OK</button></div></div>
+
+<div id="admin-login">
+    <div class="login-box">
+        <h1>🔐 Admin Panel</h1>
+        <input type="text" id="admin-user" placeholder="Email admin">
+        <input type="password" id="admin-pass" placeholder="Mot de passe">
+        <button onclick="adminLogin()">Se connecter</button>
+        <p>Admin: admin@bluelock.mg</p>
+    </div>
+</div>
+
+<div id="admin-dashboard">
+    <div class="admin-header"><h2>Blue Lock MG - Admin</h2></div>
+    <div class="admin-tabs"><div class="tab-btn active" onclick="showTab('users')">Utilisateurs</div><div class="tab-btn" onclick="showTab('exchanges')">Échanges</div></div>
+    <div class="tab-content active" id="tab-users"><div class="card"><h3>Utilisateurs</h3><div id="users-list"></div></div></div>
+    <div class="tab-content" id="tab-exchanges"><div class="card"><h3>Demandes</h3><div id="exchanges-list"></div></div></div>
+</div>
+
+<script>
+const API = 'http://localhost:3000/api';
+function showModal(title, text) { document.getElementById('modal-title').textContent = title; document.getElementById('modal-text').textContent = text; document.getElementById('modal').classList.add('active'); }
+function closeModal() { document.getElementById('modal').classList.remove('active'); }
+async function adminLogin() { const email = document.getElementById('admin-user').value; const password = document.getElementById('admin-pass').value; const r = await fetch(API + '/login', { method: 'POST', headers: {'Content-Type':'application/json'}, credentials: 'include', body: JSON.stringify({ email, password }) }); const d = await r.json(); if (d.success && d.user.email === 'admin@bluelock.mg') { document.getElementById('admin-login').style.display = 'none'; document.getElementById('admin-dashboard').style.display = 'block'; loadDashboard(); } else showModal('Erreur', 'Identifiants incorrects'); }
+function showTab(tab) { document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active')); document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active')); event.target.classList.add('active'); document.getElementById('tab-' + tab).classList.add('active'); if (tab === 'exchanges') loadExchanges(); if (tab === 'users') loadDashboard(); }
+async function loadDashboard() { const r = await fetch(API + '/admin/users', { credentials: 'include' }); const d = await r.json(); document.getElementById('users-list').innerHTML = d.users.map(u => `<div class="request-item"><strong>${u.name}</strong><p>${u.email}</p><p>Tokens: ${u.tokens}</p><input type="number" id="t${u.id}" placeholder="Tokens"><button class="btn-small" onclick="giveTokens('${u.email}',${u.id})">Offrir</button></div>`).join(''); }
+async function giveTokens(email, id) { const amount = parseInt(document.getElementById('t'+id).value); if (!amount) return; await fetch(API + '/admin/give-tokens', { method: 'POST', headers: {'Content-Type':'application/json'}, credentials: 'include', body: JSON.stringify({ email, amount }) }); loadDashboard(); }
+async function loadExchanges() { const r = await fetch(API + '/admin/exchanges', { credentials: 'include' }); const d = await r.json(); document.getElementById('exchanges-list').innerHTML = d.exchanges.map(e => `<div class="request-item ${e.status}"><strong>${e.reward} ${e.game.toUpperCase()}</strong><p>${e.name} - ${e.email}</p><p>UID: ${e.uid}</p><p>Statut: ${e.status}</p>${e.status==='en_attente'?`<button class="btn-small" onclick="confirmExchange(${e.id})">Confirmer</button>`:''}</div>`).join(''); }
+async function confirmExchange(id) { await fetch(API + '/admin/confirm', { method: 'POST', headers: {'Content-Type':'application/json'}, credentials: 'include', body: JSON.stringify({ id }) }); loadExchanges(); }
+</script>
+</body>
+</html>
